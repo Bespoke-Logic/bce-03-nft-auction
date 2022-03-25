@@ -92,15 +92,26 @@ describe("Auction", function () {
     expect(await chassis.balanceOf(accounts[1].address)).to.equal(0);
   });
 
+  it("Should revert an attempt to start the auction a second time", async () => {
+    const accounts = await hre.ethers.getSigners();
+    await expect(
+      auction1.connect(accounts[1]).startAuction()
+    ).to.be.revertedWith("Auction has already been started");
+    expect(await auction1.auctionStarted()).to.equal(true);
+  });
+
   it("Should allow a bid and update highestBid and highestBidder", async () => {
     const accounts = await hre.ethers.getSigners();
     const bidder = accounts[2];
     // User bids
     await expect(
-      auction1.connect(bidder).bid({ value: ethers.utils.parseEther("0.5") })
-    )
-      .to.emit(auction1, "Bid")
-      .withArgs(bidder.address, ethers.utils.parseEther("0.5"));
+      await auction1
+        .connect(bidder)
+        .bid({ value: ethers.utils.parseEther("0.5") })
+    ).to.changeEtherBalances(
+      [auction1, bidder],
+      [ethers.utils.parseEther("0.5"), ethers.utils.parseEther("-0.5")]
+    );
     // There should be new high bid
     expect(await auction1.highestBid()).to.equal(
       ethers.utils.parseEther("0.5")
@@ -142,10 +153,13 @@ describe("Auction", function () {
     const bidder = accounts[3];
     // User bids
     await expect(
-      auction1.connect(bidder).bid({ value: ethers.utils.parseEther("1.5") })
-    )
-      .to.emit(auction1, "Bid")
-      .withArgs(bidder.address, ethers.utils.parseEther("1.5"));
+      await auction1
+        .connect(bidder)
+        .bid({ value: ethers.utils.parseEther("1.5") })
+    ).to.changeEtherBalances(
+      [auction1, bidder],
+      [ethers.utils.parseEther("1.5"), ethers.utils.parseEther("-1.5")]
+    );
     // There should be new high bid
     expect(await auction1.highestBid()).to.equal(
       ethers.utils.parseEther("1.5")
@@ -159,10 +173,13 @@ describe("Auction", function () {
     const bidder = accounts[2];
     // User bids
     await expect(
-      auction1.connect(bidder).bid({ value: ethers.utils.parseEther("2") })
-    )
-      .to.emit(auction1, "Bid")
-      .withArgs(bidder.address, ethers.utils.parseEther("2"));
+      await auction1
+        .connect(bidder)
+        .bid({ value: ethers.utils.parseEther("2") })
+    ).to.changeEtherBalances(
+      [auction1, bidder],
+      [ethers.utils.parseEther("2"), ethers.utils.parseEther("-2")]
+    );
     // There should be new high bid
     expect(await auction1.highestBid()).to.equal(ethers.utils.parseEther("2"));
     expect(await auction1.highestBidder()).to.equal(bidder.address);
@@ -172,14 +189,54 @@ describe("Auction", function () {
   it("Should allow a losing bidder to withdraw their bid eth", async () => {
     const accounts = await hre.ethers.getSigners();
     const losingBidder = accounts[3];
-    expect(
+    await expect(
       await auction1.connect(losingBidder).withdraw()
-    ).to.changeEtherBalance(accounts[3], ethers.utils.parseEther("1.5"));
+    ).to.changeEtherBalances(
+      [auction1, accounts[3]],
+      [ethers.utils.parseEther("-1.5"), ethers.utils.parseEther("1.5")]
+    );
   });
 
-  //
   it("Should not allow the auction to be ended before the duration is up", async () => {
-    const accounts = await hre.ethers.getSigners("Auction has not reached end");
-    await expect(auction1.endAuction()).to.be.revertedWith;
+    const accounts = await hre.ethers.getSigners();
+    expect(await auction1.auctionEnded()).to.equal(false);
+    await expect(auction1.endAuction()).to.be.revertedWith(
+      "Auction has not reached end"
+    );
+  });
+
+  it("Should allow the auction to be ended when the duration is up", async () => {
+    const accounts = await hre.ethers.getSigners();
+    const seller = accounts[1];
+    const winner = accounts[2];
+    // Move the clock ahead until the auction is over
+    await network.provider.send("evm_increaseTime", [3600]);
+    expect(await auction1.auctionEnded()).to.equal(false);
+    // When the auction ends, the proceeds get transferred to the seller
+    await expect(await auction1.endAuction()).to.changeEtherBalances(
+      [auction1, seller],
+      [ethers.utils.parseEther("-2"), ethers.utils.parseEther("2")]
+    );
+    // And transfers the NFT to the winner
+    expect(await chassis.balanceOf(auction1.address)).to.equal(0);
+    expect(await chassis.ownerOf(1)).to.equal(winner.address);
+    expect(await auction1.auctionEnded()).to.equal(true);
+  });
+
+  // Losing bidder can withdraw their bid amount
+  it("Should allow the winning bidder to withdraw their previous bid eth", async () => {
+    const accounts = await hre.ethers.getSigners();
+    const bidder = accounts[2];
+    await expect(
+      await auction1.connect(bidder).withdraw()
+    ).to.changeEtherBalance(accounts[2], ethers.utils.parseEther("0.5"));
+  });
+
+  it("Should revert an attempt to start the auction after it has ended", async () => {
+    const accounts = await hre.ethers.getSigners();
+    await expect(
+      auction1.connect(accounts[1]).startAuction()
+    ).to.be.revertedWith("Auction has already been started");
+    expect(await auction1.auctionStarted()).to.equal(true);
   });
 });
