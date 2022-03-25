@@ -34,13 +34,6 @@ describe("Auction", function () {
     await chassis
       .connect(accounts[4])
       .mint({ value: ethers.utils.parseEther("1") });
-    console.log(
-      accounts[0].address,
-      accounts[1].address,
-      accounts[2].address,
-      accounts[3].address,
-      accounts[4].address
-    );
   });
 
   it("should deploy and set state variables", async function () {
