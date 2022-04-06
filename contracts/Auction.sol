@@ -61,10 +61,10 @@ contract Auction is ERC721Holder {
         //  reminder: Solidity timestamps are in seconds
         //  passed in duration is also in seconds
         auctionEnd = uint256(block.timestamp + auctionDuration);
-        // Transfer the NFT from the seller to the contract
-        token.safeTransferFrom(seller, address(this), tokenId);
         // Emit the auctionStarted event
         emit AuctionStarted();
+        // Transfer the NFT from the seller to the contract
+        token.safeTransferFrom(seller, address(this), tokenId);
     }
 
     // Allows bids
@@ -91,10 +91,10 @@ contract Auction is ERC721Holder {
         //  reset value to 0 to prevent reenterancy attacks
         uint256 totalBids = bids[msg.sender];
         bids[msg.sender] = 0;
+        emit Withdraw(msg.sender, totalBids);
         // Transfer the amount to the wallet
         (bool success, ) = payable(msg.sender).call{value: totalBids}("");
         require(success, "Refund not successful");
-        emit Withdraw(msg.sender, totalBids);
     }
 
     // End the auction and transfer results
@@ -104,6 +104,7 @@ contract Auction is ERC721Holder {
         require(block.timestamp > auctionEnd, "Auction has not reached end");
         // End the auction
         auctionEnded = true;
+        emit AuctionEnded(highestBidder, highestBid);
         // If the highest bidder is the null address, nobody bid.
         if (highestBidder == address(0)) {
             //  So, transfer the NFT back to the seller
@@ -115,6 +116,5 @@ contract Auction is ERC721Holder {
             (bool success, ) = seller.call{value: highestBid}("");
             require(success, "Payment transfer failed");
         }
-        emit AuctionEnded(highestBidder, highestBid);
     }
 }
