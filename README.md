@@ -6,5 +6,5 @@
 
 This is a simple auction contract for an NFT. This is a single contract for a single NFT auction, intended to be created by a factory contract.
 
-- Trandition auction (price increases with each bid)
+- Traditional auction (price increases with each bid)
 - Time limited
